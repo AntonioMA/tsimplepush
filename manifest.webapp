@@ -2,7 +2,7 @@
   "name": "TSimplePush",
   "description": "TokesApp",
   "launch_path": "/index.html",
-  "version": "0.1",
+  "version": "0.5",
   "developer": {
     "name": "Carmen Jimenez, Antonio M. Amaya",
     "url": "https://github.com/AntonioMA/tsimplepush/"

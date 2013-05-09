@@ -3,7 +3,7 @@
 'use strict';
 
 var PushDb = (function () {
-  var DB_NAME = 'tsimplepush_db_test';
+  var DB_NAME = 'tsimplepush_db_sprayer';
   var DB_VERSION = 1.0;
   var DB_TNAME = 'pushEndpoints';
                 

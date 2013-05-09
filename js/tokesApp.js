@@ -5,20 +5,13 @@
 var TokesApp = (function () {
   var debugTokes = true;
 
-  // Toggle this if/when the server side is installed
-//  var server = undefined;
-  var server = "http://sigsegv.es:8123";
-// GET -> Get friends remote data
-// PUT -> Put friends endpoints and nicks for me
-                
-
-
   function debug (msg) {
     console.log('[DEBUG] tsimplepush.tokesApp: ' + msg + '\n');
     
   }
   var self = this;
   var selfNick = "";
+  var selfPhone = "";
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -49,6 +42,8 @@ var TokesApp = (function () {
   // Form elements and the rest...
 
   var selfNickField = null;
+  var selfPhoneField = null;
+
   var loginButton = null;
   var mainWrapper = null;
   var selfNickWrapper = null;
@@ -68,6 +63,10 @@ var TokesApp = (function () {
     return false;
   }
 
+  function composeTopic(aFrom, aTo) {
+    return "toke." + aFrom + "." + aTo;
+  }
+
   // What I'll have on the HTML:
   // <ul id='all-friends-lists' class="whatever">
   //   <li id='friend-id-' + nick onclick="clickOnFriend(ep);"> Nick </li>
@@ -79,23 +78,32 @@ var TokesApp = (function () {
     // The way this works is: 
     var ul = createElementAt(friendsContainer, "ul", "ul-friend-list");
     for (var i in myFriends) {
-      var canToke = myFriends[i].remoteEndpoint ? ". Send Toke!" : "";
-      var isMyFriend = myFriends[i].endpoint ? "" : "Not my friend! ";
+      var canToke = ". Send Toke!";
+      var isMyFriend = "";
       var li = createElementAt(ul, "li", "li-nick-"+myFriends[i].nick, isMyFriend + myFriends[i].nick + canToke );
-      if (myFriends[i].remoteEndpoint) {
+      if (true) {
         li.onclick = function() {
-          debugTokes && debug("Somebody clicked! Sending Toke to " + arguments[1] + " on " + arguments[0]);
-          Push.sendPushTo(arguments[0]);
-        }.bind(undefined, myFriends[i].remoteEndpoint, myFriends[i].nick);
+          debugTokes && debug("Somebody clicked! Sending Toke to " + arguments[0]);
+          Sprayer.notifyTopic(arguments[0],"Hola de tu amigo " + arguments[1]);
+        }.bind(undefined, composeTopic(selfNick, myFriends[i].nick), selfNick) ;
       }
     }
   }
 
   function addFriendEP(aNick, aEndpoint) {
     var ul=document.getElementById("ul-friend-list") || createElementAt(friendsContainer, "ul", "ul-friend-list");
-    var li = document.getElementById("li-nick-" + aNick) || createElementAt(ul, "li", "li-nick-" + aNick, aNick);
+    // TO-DO TO-DO TO-DO: CHANGE TO ADD CORRECTLY THE HANDLER!!!!!
+    var li = document.getElementById("li-nick-" + aNick) || createElementAt(ul, "li", "li-nick-" + aNick, aNick ". Send Toke!);
+    li.onclick = function () {
+      debugTokes && debug("Somebody clicked! Sending Toke to " + arguments[0]);
+      Sprayer.notifyTopic(arguments[0],"Hola de tu amigo " + arguments[1]);
+    }.bind(undefined, composeTopic(selfNick, aNick), selfNick) ;
+
     PushDb.setNickForEP(aEndpoint, aNick);
-    sendEndpointToServer(aNick, aEndpoint);
+    Sprayer.sendEndpointToServer(composeTopic(aNick, selfNick), {
+      sms: selfPhone, 
+      owd: encodeURIComponent(window.btoa(aEndpoint))
+    });
     var added = false;
     for (var i in myFriends) {
       if (myFriends[i].nick === aNick) {
@@ -111,28 +119,6 @@ var TokesApp = (function () {
           remoteEndpoint: undefined
       });
     }
-    
-  }
-
-  // Doing it generic isn't worth the problem... this expects to get a JSON and will bork otherwise
-  function sendXHR(aType, aURL, aData, aSuccessCallback, aFailureCallback) {
-      var xhr = new XMLHttpRequest();
-      xhr.open(aType, aURL);
-      xhr.responseType = "json";
-      xhr.overrideMimeType("application/json");
-      xhr.onload = function (evt) {
-        debugTokes && debug("sendXHR. XHR success");
-        // Error control is for other people... :P
-        if (aSuccessCallback)
-          aSuccessCallback(xhr.response);
-      }
-      xhr.onerror = function (evt){
-        debugTokes && debug("sendXHR. XHR failed " + JSON.stringify(evt));
-        if (aFailureCallback)
-          aFailureCallback(evt);
-      }
-
-      xhr.send(aData);
     
   }
 
@@ -168,33 +154,14 @@ var TokesApp = (function () {
 
 
   function loadMyRemoteFriends() {
-    // To-Do: This should load the data remotely... if the server is configured and up
-    if (server) { // Server side not done yet
-      sendXHR("GET", server + "/friend/" + encodeURIComponent(selfNick), null, mixFriends, updateFriendList);
-
-    } else {
-        // Simulation FTW!
-      var myRemoteFriends = [
-        { 
-          nick: "joselito",
-          endpoint: "ep_joselito"
-        },
-        {
-          nick: "jaimito",
-          endpoint: "ep_jaimito"
-        },
-        {
-          nick: "julito",
-          endpoint: "ep_julito"
-        }
-      ];
-      mixFriends(myRemoteFriends);
-    }
+    // Not needed anymore... either the channel exists or it doesn't...
+    mixFriends([]);
   }
 
   function saveFriendsToRemote() {
+    // TO-DO!!!!! Is this really needed????
     for (var i in myFriends) {
-      sendEndpointToServer(myFriends[i].nick, myFriends[i].endpoint);
+      Sprayer.sendEndpointToServer(composeTopic(myFriends[i].nick, selfNick), {sms: selfPhone, owd: encodeURIComponent(window.btoa(myFriends[i].endpoint)}));
     }
   }
 
@@ -204,9 +171,10 @@ var TokesApp = (function () {
     if (evt && evt.preventDefault)
       evt.preventDefault();
     debugTokes && debug("onLoginClick called");
-    if (selfNickField.value !== selfNick) {
+    if ((selfNickField.value !== selfNick) || selfPhoneField.value !== selfPhone){
       selfNick = selfNickField.value;
-      PushDb.setSelfNick(selfNick);
+      selfPhone = selfPhoneField.value;
+      PushDb.setSelfNick(selfNick + ":" + selfPhone);
     }
     selfNickWrapper.style.display = 'none';
     mainWrapper.style.display = '';
@@ -219,23 +187,20 @@ var TokesApp = (function () {
   }
 
 
+  // aNick, for this version should take the form nick:phone
   function setSelfNick(aNick) {
     debugTokes && debug("setSelfNick called with: " + JSON.stringify(aNick));
     if (aNick && aNick.nick) {
       debugTokes && debug("setting selfNick to " + aNick.nick);
-      selfNick = aNick.nick;
+      var comp = aNick.nick.split(":");
+      selfNick = comp[0];
+      selfPhone = comp[1];
     } else {
       selfNick = "";
+      selfPhone = "";
     }
-    selfNickField.value = selfNick;
-  }
-
-  function sendEndpointToServer(aNick, aEndpoint) {
-    // should URLize selfNick, aNick and aEndPoint... definitely aEndpoint
-    var dataToSend = 'endpoint=' + aEndpoint;
-    debugTokes && debug ("Sending " + dataToSend + "to " + server + " (or I will someday anyway) ");
-    if (server)
-      sendXHR("PUT", server + "/friend/" + encodeURIComponent(aNick) + "/" + encodeURIComponent(selfNick), dataToSend);
+    selfNickField.value = selfNick || "";
+    selfPhoneField.value = selfPhone || "";
   }
 
   function onAddFriendClick(evt) {
@@ -263,6 +228,7 @@ var TokesApp = (function () {
     debugTokes && debug("init called");
 
     selfNickField = document.getElementById("self-nick");
+    selfPhoneField = document.getElementById("self-phone");
     loginButton = document.getElementById("login-button");
     addFriendButton = document.getElementById("add-friend-button");
     mainWrapper = document.getElementById("main-window");
@@ -282,6 +248,9 @@ var TokesApp = (function () {
     Push.setPushHandler(function (e) {
       processNotification(e.pushEndpoint);
     });
+
+    // load the initial value for selfNick
+    PushDb.getSelfNick(setSelfNick);
 
   }
 
@@ -313,7 +282,6 @@ var TokesApp = (function () {
 
   return {
     init: init,
-    setSelfNick: setSelfNick,
     processNotification: processNotification
 
   }
@@ -324,9 +292,5 @@ var TokesApp = (function () {
 window.addEventListener('load', function showBody() {
   console.log("loadHandler called");
   TokesApp.init();
-  PushDb.getSelfNick(TokesApp.setSelfNick);
 
 });
-
-
-
